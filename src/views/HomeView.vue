@@ -3,7 +3,8 @@ import List from "../components/List.vue";
 </script>
 
 <template>
-  <List />
+  <List :path="['']" />
 </template>
 
-<style></style>
+<style>
+</style>

@@ -1,6 +1,4 @@
 <script setup lang="tsx">
-import { link } from 'fs';
-
 interface Props {
   path: string[];
 }
