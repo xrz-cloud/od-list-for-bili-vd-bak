@@ -146,8 +146,6 @@ const columns: Column<any>[] = [
         </ElLink>
       </>
     ),
-    width: 150,
-    align: "center",
   },
 ];
 const data = ref<ShowItem>([
