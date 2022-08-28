@@ -1,7 +1,7 @@
-import { Octokit } from '@octokit/core'
-import { Endpoints } from "@octokit/types";
+import { Octokit } from 'octokit'
+//import { Endpoints } from "@octokit/types";
 
-type readResponese = Endpoints["GET /gists/{gist_id}"]['response']
+//type readResponese = Endpoints["GET /gists/{gist_id}"]['response']
 
 export default class {
   #octokit
@@ -19,7 +19,7 @@ export default class {
 
   async read() {
     console.log('Fetch data from gist:', this.#gist_filename)
-    const response: readResponese = await this.#octokit.request('GET /gists/{gist_id}', {
+    const response = await this.#octokit.request('GET /gists/{gist_id}', {
       gist_id: this.#gist_id
     })
     if (!response.data.files) return false

@@ -4,9 +4,10 @@ import { ElLink, ElTag, TableV2FixedDir, TableV2SortOrder } from "element-plus";
 import type { Column, SortBy, SortState } from "element-plus";
 import yaml from "js-yaml";
 import formatSize from "../utils/formatSize";
-import isJSON from "../utils/isJSON"
+import isJSON from "../utils/isJSON";
 import router from "../router";
-import { useRoute } from "vue-router"
+import { useRoute } from "vue-router";
+import console from "console";
 
 interface group_main_config {
   bangumi:
@@ -15,6 +16,13 @@ interface group_main_config {
   }
   | {};
   rule?: [number, string, string][] | [];
+}
+
+interface group_bangumi_config {
+  type: "mdid";
+  name: string;
+  BelongTo: string;
+  own: object[];
 }
 
 type ODItem = {
@@ -36,22 +44,23 @@ type ShowItem = {
   file?: {
     mimeType: string;
   };
+  ep?: number;
 }[];
-
 
 interface Props {
   path: string[];
 }
 const props = defineProps<Props>();
 
-let __path = reactive(props.path)
+let __path = reactive(props.path);
 
-const route = useRoute()
-watch(//FIXME 跳转至 /raw/ 下目录时此页面再次进行一次请求
+const route = useRoute();
+watch(
+  //FIXME 跳转至 /raw/ 下目录时此页面再次进行一次请求
   () => route.params.path,
   (toParams, fromParams) => {
     if (toParams !== fromParams) {
-      __path = toParams as string[]
+      __path = toParams as string[];
       data.value = [
         {
           lastModifiedDateTime: new Date().toLocaleString(),
@@ -71,23 +80,23 @@ watch(//FIXME 跳转至 /raw/ 下目录时此页面再次进行一次请求
             to: "",
           },
         },
-      ]
-      MakePath()
-      main()
+      ];
+      MakePath();
+      main();
     }
   }
-)
+);
 
-
-let _path = "", path: string
+let _path = "",
+  path: string;
 function MakePath() {
-  _path = ""
+  _path = "";
   for (const x of __path) {
     _path += "/" + x;
   }
   path = _path || "/";
 }
-MakePath()
+MakePath();
 
 const columns: Column<any>[] = [
   {
@@ -169,7 +178,6 @@ const data = ref<ShowItem>([
   },
 ]);
 
-
 async function main() {
   fetch("/api/item?path=" + encodeURIComponent(path))
     .then((res) => {
@@ -177,7 +185,7 @@ async function main() {
       else return Promise.reject("返回数据出错");
     })
     .then((list_res: { value?: ODItem; error?: object }) => {
-      if (list_res["value"] && path == "/group/") {
+      /*if (list_res["value"] && path == "/group/") {
         let _list: ODItem = []; //一次过滤用
         //过滤文件夹
         for (const x of list_res.value) {
@@ -187,12 +195,29 @@ async function main() {
           }
         }
         return _list;
-      } else if (list_res.value) return list_res.value;
+      } else */if (list_res.value) return list_res.value;
       else return Promise.reject("返回数据出错");
     })
     .then((_list) => {
-      if (path == "/group/") {
-        console.log('进入group首页')
+      if (path == "/") {
+        //通用list处理部分
+        let __list: ShowItem = [];
+        for (const x of _list) {
+          __list.push({
+            lastModifiedDateTime: new Date(
+              x.lastModifiedDateTime
+            ).toLocaleString(),
+            name: x.name,
+            size: x.size,
+            link: {
+              type: x.file ? "file" : "folder", //是否为file
+              to: x.file ? "/raw" + path + x.name : path + x.name + "/",
+            },
+          });
+        }
+        data.value = __list;
+        //TODO 加入README.md解析
+      } else if (path == "/group/") {
         fetch("/api/raw?path=" + encodeURIComponent(path + "config.yaml"))
           .then((res) => {
             if (res.ok) return res.text();
@@ -206,6 +231,7 @@ async function main() {
              * @xrz-cloud 将name由mdid(media id)替换为对应的番剧名
              */
             let __list: ShowItem = []; //替换name用
+            let blacklist: string[] = []
             for (const x of _list) {
               for (const [uuid, allSession] of Object.entries(
                 main_config.bangumi
@@ -241,6 +267,18 @@ async function main() {
                     to: "/raw" + path + x.name,
                   },
                 });
+              } else if (!Number(x.name)) {
+                __list.push({
+                  lastModifiedDateTime: new Date(
+                    x.lastModifiedDateTime
+                  ).toLocaleString(),
+                  name: x.name,
+                  size: x.size,
+                  link: {
+                    type: "folder",
+                    to: path + x.name + "/",
+                  },
+                });
               }
             }
             return __list;
@@ -251,10 +289,10 @@ async function main() {
             ); //XXX folder优先于file
             //TODO 未实现按字符排序，仅folder>file
           })
-          .catch((err) => console.warn(err));
+        //BUG
+        //.catch((err) => console.warn(err));
       } else if (path == "/single/") {
       } else if (props.path[0] == "group") {
-        console.log('进入group分页')
         //通用list处理部分
         let __list: ShowItem = [];
         for (const x of _list) {
@@ -276,21 +314,56 @@ async function main() {
             else return Promise.reject("返回数据出错");
           })
           .then((res) => {
-            if (isJSON(res)) return ['def', JSON.parse(res)]//以默认模式运行
-            else return ['conf', yaml.load(res)]//以config模式运行
+            if (isJSON(res)) return ["def", JSON.parse(res)]; //以默认模式运行
+            else return ["conf", yaml.load(res) as group_bangumi_config]; //以config模式运行
           })
           .then((res) => {
-            if (res[0] == "def" && res[1].error) data.value = __list
-            else if (res[0] == "conf") { }
+            if (res[0] == "def" && res[1].error) data.value = __list;
+            else if (res[0] == "conf") {
+              let ___list: ShowItem = [];
+              for (const j of __list) {
+                if (res[1]['own'][0]["Bili"][0]["CML"][0]["video"][0][0] != -1)
+                  for (const x of res[1]['own'][0]["Bili"][0]["CML"][0]["video"]) {
+                    if (j.name == x[1])
+                      ___list.push({
+                        lastModifiedDateTime: j.lastModifiedDateTime,
+                        name: "<video>  <" + x[0] + ">  " + j.name,
+                        size: j.size,
+                        link: j.link,
+                      });
+                  }
+                if (res[1]['own'][0]["Bili"][0]["CML"][1]["danmaku"][0][0] != -1)
+                  for (const x of res[1]['own'][0]["Bili"][0]["CML"][1]["danmaku"]) {
+                    if (j.name == x[1])
+                      ___list.push({
+                        lastModifiedDateTime: j.lastModifiedDateTime,
+                        name: "<danmaku>  <" + x[0] + ">  " + j.name,
+                        size: j.size,
+                        link: j.link,
+                      });
+                  }
+                if (res[1]['own'][0]["Bili"][0]["CML"][2]["zip"][0][0] != -1)
+                  for (const x of res[1]['own'][0]["Bili"][0]["CML"][2]["zip"]) {
+                    if (j.name == x[1])
+                      ___list.push({
+                        lastModifiedDateTime: j.lastModifiedDateTime,
+                        name: "<zip>  <" + x[0] + ">  " + j.name,
+                        size: j.size,
+                        link: j.link,
+                      });
+                  }
+              }
+              data.value = ___list
+            }
           })
-          .catch((err) => {
-            console.warn(err)
-          });
+        //BUG
+        //.catch((err) => console.warn(err));
       }
     })
-    .catch((err) => console.warn(err));
+  //BUG
+  //.catch((err) => console.warn(err));
 }
-main()
+main();
 /*
 const sort = ref<SortBy>({ key: "name", order: TableV2SortOrder.ASC });
 const onColumnSort = (sortBy: SortBy) => {
